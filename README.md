@@ -60,7 +60,15 @@
 ![管理者画面](screenshots/admin.png)
 
 
+📜 ライセンス
 
+MIT License
+自由に改変・再利用可能です（商用利用も可）。
+
+📬 開発者
+
+作成者：taerunda
+ご質問・ご相談は taerunda@gmail.com までご連絡ください。
 
 
 
