@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>申請管理（申請中のみ表示）</title>
+  <style>
+    body {
+      font-family: "Helvetica Neue", sans-serif;
+      background-color: #f2f4f8;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    .application-card {
+      border: 1px solid #ccc;
+      border-left: 6px solid #007BFF;
+      border-radius: 8px;
+      background-color: #fff;
+      margin: 20px auto;
+      padding: 20px;
+      max-width: 600px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    .application-header {
+      font-size: 1.3em;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #2c3e50;
+    }
+
+    .application-content {
+      font-size: 0.95em;
+      margin-bottom: 16px;
+      color: #444;
+    }
+
+    .application-buttons button {
+      margin-right: 10px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .approve-button {
+      background-color: #28a745;
+      color: white;
+    }
+
+    .reject-button {
+      background-color: #dc3545;
+      color: white;
+    }
+
+    .application-footer {
+      font-size: 0.85em;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <h1>申請管理ページ（申請中）</h1>
+  <a href="admin_attendance.html">▶ 出勤状況一覧ページへ</a>
+  <div id="applicationList"></div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4kN3Zsy-8XlraWLfIs2125fTVI24JPGo",
+      authDomain: "shaintimemanager.firebaseapp.com",
+      projectId: "shaintimemanager",
+      storageBucket: "shaintimemanager.appspot.com",
+      messagingSenderId: "966234985083",
+      appId: "1:966234985083:web:8611f16471dc47a9a8de",
+      measurementId: "G-1M52J60RR2"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    // ▼ 自動ログアウト処理 ▼
+    const AUTO_LOGOUT_TIME = 15 * 60 * 1000; // 15分
+    let logoutTimer;
+
+    function autoLogout() {
+      auth.signOut().then(() => {
+        alert("15分間操作がなかったため、自動ログアウトしました。");
+        window.location.href = "login.html";
+      });
+    }
+
+    function resetLogoutTimer() {
+      if (logoutTimer) clearTimeout(logoutTimer);
+      logoutTimer = setTimeout(autoLogout, AUTO_LOGOUT_TIME);
+    }
+
+    ["click", "mousemove", "keydown", "scroll", "touchstart"].forEach(event => {
+      document.addEventListener(event, resetLogoutTimer);
+    });
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        resetLogoutTimer(); // 初期化
+        loadApplications(); // 認証済みユーザーのみ申請データを読み込む
+      } else {
+        window.location.href = "admin-login.html"; // 未ログイン時もログインページへ
+      }
+    });
+
+    // ▼ 申請データ表示処理 ▼
+    async function loadApplications() {
+      const usersSnapshot = await db.collection("users").get();
+      const userMap = {};
+      usersSnapshot.forEach(doc => {
+        userMap[doc.id] = doc.data().name || doc.data().displayName || "不明";
+      });
+
+      const querySnapshot = await db.collection("applications")
+        .where("status", "==", "申請中")
+        .orderBy("requestedAt", "desc")
+        .get();
+
+      const container = document.getElementById("applicationList");
+      container.innerHTML = "";
+
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        const userName = userMap[data.uid] || "不明";
+        renderApplication(doc, userName);
+      });
+    }
+
+    function renderApplication(doc, userName) {
+      const data = doc.data();
+      const card = document.createElement("div");
+      card.className = "application-card";
+
+      const header = document.createElement("div");
+      header.className = "application-header";
+      header.textContent = `${userName}（${data.type}）`;
+
+      const content = document.createElement("div");
+      content.className = "application-content";
+      content.innerHTML = `
+        <strong>日付:</strong> ${data.date || "未入力"}<br>
+        <strong>詳細:</strong> ${formatDetails(data)}<br>
+        <strong>ステータス:</strong> ${data.status}
+      `;
+
+      const buttons = document.createElement("div");
+      buttons.className = "application-buttons";
+
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "approve-button";
+      approveBtn.textContent = "許可";
+      approveBtn.onclick = () => updateApplicationStatus(doc.id, "許可");
+
+      const rejectBtn = document.createElement("button");
+      rejectBtn.className = "reject-button";
+      rejectBtn.textContent = "却下";
+      rejectBtn.onclick = () => updateApplicationStatus(doc.id, "却下");
+
+      buttons.appendChild(approveBtn);
+      buttons.appendChild(rejectBtn);
+
+      const footer = document.createElement("div");
+      footer.className = "application-footer";
+      footer.textContent = `申請日時: ${data.requestedAt?.toDate().toLocaleString() || "不明"}`;
+
+      card.appendChild(header);
+      card.appendChild(content);
+      card.appendChild(buttons);
+      card.appendChild(footer);
+
+      document.getElementById("applicationList").appendChild(card);
+    }
+
+    function formatDetails(data) {
+      switch (data.type) {
+        case "休日申請":
+          return `種類: ${data.holidayType || ""}`;
+        case "遅刻申請":
+          return `予定: ${data.scheduledStart} → 実際: ${data.lateTime}`;
+        case "残業申請":
+          return `時間: ${data.startTime} ～ ${data.endTime}<br>理由: ${(data.reasons || []).join(", ")} ${data.otherReason || ""}`;
+        case "休日出勤申請":
+          return `時間: ${data.startTime} ～ ${data.endTime}<br>内容: ${data.task}`;
+        default:
+          return "詳細情報なし";
+      }
+    }
+
+    async function updateApplicationStatus(docId, newStatus) {
+      try {
+        await db.collection("applications").doc(docId).update({
+          status: newStatus
+        });
+        alert(`ステータスを「${newStatus}」に更新しました`);
+        loadApplications();
+      } catch (error) {
+        console.error("ステータス更新エラー:", error);
+        alert("更新に失敗しました");
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>QRコード出退勤打刻</title>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        video {
+            border: 1px solid #ccc;
+            width: 300px;
+            height: 200px;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 20px;
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 20px;
+            color: green;
+        }
+        #clock {
+            font-size: 40px;
+            margin-bottom: 10px;
+            color: #555;
+        }
+    </style>
+     <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>QRコード打刻</h1>
+
+    <div id="clock">--:--:--</div>
+
+    <video id="preview" autoplay muted playsinline></video>
+
+    <div>
+        <button onclick="setType('出勤')">出勤モード</button>
+        <button onclick="setType('退勤')">退勤モード</button>
+    </div>
+
+    <p id="result">モードを選択してください</p>
+
+    <script>
+        // Firebase 設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyB4kN3Zsy-8XlraWLfIs2125fTVI24JPGo",
+            authDomain: "shaintimemanager.firebaseapp.com",
+            projectId: "shaintimemanager",
+            storageBucket: "shaintimemanager.appspot.com",
+            messagingSenderId: "966234985083",
+            appId: "1:966234985083:web:8611f16471dc47a9a8c8de",
+            measurementId: "G-1M52J60RR2"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentType = null;
+        let codeReader = null;
+        let cameraTimeout = null;
+
+        // 時計表示
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleString('ja-JP', { hour12: false });
+            document.getElementById("clock").textContent = timeStr;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        function setType(type) {
+            if (codeReader) {
+                codeReader.reset();
+            }
+            if (cameraTimeout) {
+                clearTimeout(cameraTimeout);
+            }
+
+            currentType = type;
+            document.getElementById("result").innerText = `${type}モードです。QRコードをかざしてください。`;
+
+            startCamera();
+        }
+
+        function startCamera() {
+            const previewElement = document.getElementById('preview');
+            codeReader = new ZXing.BrowserQRCodeReader();
+
+            // 1分後にカメラ自動停止
+            cameraTimeout = setTimeout(() => {
+                codeReader.reset();
+                document.getElementById("result").innerText = "カメラは1分後に自動停止しました。再度モードを選択してください。";
+            }, 60000);
+
+            codeReader.decodeOnceFromVideoDevice(undefined, previewElement)
+                .then(async (result) => {
+                    clearTimeout(cameraTimeout);
+                    const uid = result.text;
+                    const nowDate = new Date();
+
+                    let userName = uid; // デフォルトはuid
+                    try {
+                        const userDoc = await db.collection("users").doc(uid).get();
+                        if (userDoc.exists) {
+                            const data = userDoc.data();
+                            userName = data.name || uid;
+                        }
+                    } catch (e) {
+                        console.warn("ユーザー名の取得に失敗:", e);
+                    }
+
+                    let latitude = null;
+                    let longitude = null;
+                    let address = "住所不明";
+
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(async (pos) => {
+                            latitude = pos.coords.latitude;
+                            longitude = pos.coords.longitude;
+
+                            try {
+                                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ja`);
+                                const data = await res.json();
+                                address = data.display_name || address;
+                            } catch (e) {
+                                console.warn("住所取得に失敗:", e);
+                            }
+
+                            saveAttendance(uid, userName, nowDate, latitude, longitude, address);
+                        }, (err) => {
+                            console.warn("位置情報取得失敗:", err);
+                            saveAttendance(uid, userName, nowDate, latitude, longitude, address);
+                        });
+                    } else {
+                        saveAttendance(uid, userName, nowDate, latitude, longitude, address);
+                    }
+
+                    document.getElementById("result").innerText = `${userName} の ${currentType} を記録中...`;
+                    codeReader.reset();
+                })
+                .catch((err) => {
+                    clearTimeout(cameraTimeout);
+                    console.error("QRコードの読み取りに失敗:", err);
+                    document.getElementById("result").innerText = "QRコードの読み取りに失敗しました。もう一度試してください。";
+                });
+        }
+
+        function saveAttendance(uid, userName, now, latitude, longitude, address) {
+            db.collection("attendance").add({
+                uid: uid,
+                userName: userName,
+                type: currentType,
+                timestamp: firebase.firestore.Timestamp.fromDate(now),
+                location: {
+                    latitude,
+                    longitude,
+                    address
+                }
+            })
+            .then(() => {
+                document.getElementById("result").innerText = `${userName} の ${currentType} を記録しました（${now.toLocaleString()}）`;
+            })
+            .catch((error) => {
+                document.getElementById("result").innerText = `記録に失敗: ${error.message}`;
+            });
+        }
+    </script>
+</body>
+</html>

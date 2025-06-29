@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ユーザー詳細</title>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .month-header {
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 1em;
+      background-color: #f0f0f0;
+      padding: 0.5em;
+    }
+    .hidden {
+      display: none;
+    }
+    .summary {
+      font-size: 0.9em;
+      color: #666;
+      margin-bottom: 0.5em;
+    }
+  </style>
+</head>
+<body>
+  <h1>ユーザー詳細ページ</h1>
+  <button onclick="location.href = 'admin_attendance.html'">戻る</button>
+
+  <section>
+    <h2>ユーザー情報</h2>
+    <p><strong>名前:</strong> <span id="userName">-</span></p>
+    <p><strong>メール:</strong> <span id="userEmail">-</span></p>
+  </section>
+
+  <section>
+    <h2>出退勤履歴（月別）</h2>
+    <div id="attendanceList"></div>
+  </section>
+
+  <section>
+    <h2>申請履歴</h2>
+    <ul id="applicationList"></ul>
+  </section>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4kN3Zsy-8XlraWLfIs2125fTVI24JPGo",
+      authDomain: "shaintimemanager.firebaseapp.com",
+      projectId: "shaintimemanager",
+      storageBucket: "shaintimemanager.appspot.com",
+      messagingSenderId: "966234985083",
+      appId: "1:966234985083:web:8611f16471dc47a9a8c8de",
+      measurementId: "G-1M52J60RR2"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    auth.onAuthStateChanged(currentUser => {
+      if (!currentUser) {
+        alert("ログインしていません。ログインページに戻ります。");
+        location.href = 'admin-login.html';
+        return;
+      }
+
+      const params = new URLSearchParams(location.search);
+      const uid = params.get("uid");
+      const name = decodeURIComponent(params.get("name") || "");
+
+      if (!uid) {
+        alert("UIDが指定されていません。");
+        return;
+      }
+
+      document.getElementById("userName").innerText = name || "(不明)";
+
+      // ユーザーのメールアドレス取得
+      db.collection("users").doc(uid).get().then(doc => {
+        if (doc.exists) {
+          document.getElementById("userEmail").innerText = doc.data().email || "(不明)";
+        } else {
+          document.getElementById("userEmail").innerText = "(データなし)";
+        }
+      });
+
+      // 出退勤履歴
+      db.collection("attendance")
+        .where("uid", "==", uid)
+        .orderBy("timestamp", "desc")
+        .limit(200)
+        .get()
+        .then(snapshot => {
+          const grouped = {};
+
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const dateObj = data.timestamp?.toDate();
+            if (!dateObj) return;
+
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+            const d = String(dateObj.getDate()).padStart(2, "0");
+            const dateKey = `${y}-${m}-${d}`;
+            const monthKey = `${y}年${m}月`;
+
+            if (!grouped[monthKey]) grouped[monthKey] = {};
+            if (!grouped[monthKey][dateKey]) grouped[monthKey][dateKey] = [];
+
+            grouped[monthKey][dateKey].push({
+              type: data.type,
+              time: dateObj.toLocaleTimeString(),
+              timestamp: dateObj,
+              status: data.status || "",
+              address: data.location?.address || "住所不明"
+            });
+          });
+
+          const list = document.getElementById("attendanceList");
+          list.innerHTML = "";
+
+          const sortedMonths = Object.keys(grouped).sort((a, b) => b.localeCompare(a, "ja"));
+          sortedMonths.forEach(month => {
+            const dates = grouped[month];
+            let total = 0, late = 0, absent = 0;
+            const dateKeys = Object.keys(dates).sort().reverse();
+            const daySummaries = [];
+
+            dateKeys.forEach(dateKey => {
+              const logs = dates[dateKey];
+              const entry = { date: dateKey, in: "", out: "", inAddr: "", outAddr: "" };
+              const statusList = logs.map(l => l.status || "");
+
+              logs.forEach(log => {
+                if (log.type === "出勤") {
+                  entry.in = log.time;
+                  entry.inAddr = log.address;
+                }
+                if (log.type === "退勤") {
+                  entry.out = log.time;
+                  entry.outAddr = log.address;
+                }
+              });
+
+              let status = "通常";
+              if (statusList.includes("遅刻")) {
+                status = "遅刻";
+                late++;
+              } else if (!entry.in && !entry.out) {
+                status = "欠勤";
+                absent++;
+              } else {
+                total++;
+              }
+
+              daySummaries.push(`
+                <li>
+                  ${dateKey.replace(/-/g, "/")}：
+                  出勤 ${entry.in || "-"}（${entry.inAddr || "住所不明"}） /
+                  退勤 ${entry.out || "-"}（${entry.outAddr || "住所不明"}）
+                  （${status}）
+                </li>
+              `);
+            });
+
+            const monthId = `month-${month.replace(/[^\d]/g, "")}`;
+            const header = document.createElement("div");
+            header.className = "month-header";
+            header.textContent = `${month} ▶`;
+            header.onclick = () => {
+              const target = document.getElementById(monthId);
+              target.classList.toggle("hidden");
+              header.textContent = `${month} ${target.classList.contains("hidden") ? "▶" : "▼"}`;
+            };
+
+            const summary = document.createElement("div");
+            summary.className = "summary";
+            summary.textContent = `出勤日数: ${total}日 ／ 遅刻: ${late} ／ 欠勤: ${absent}`;
+
+            const ul = document.createElement("ul");
+            ul.id = monthId;
+            ul.className = "hidden";
+            ul.innerHTML = daySummaries.join("");
+
+            list.appendChild(header);
+            list.appendChild(summary);
+            list.appendChild(ul);
+          });
+        });
+
+      // 申請履歴
+      db.collection("applications")
+        .where("uid", "==", uid)
+        .orderBy("requestedAt", "desc")
+        .limit(30)
+        .get()
+        .then(snapshot => {
+          const list = document.getElementById("applicationList");
+          list.innerHTML = "";
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const date = data.date || "-";
+            const type = data.type || "-";
+            const status = data.status || "-";
+            const li = document.createElement("li");
+            li.textContent = `${type}（${date}） - ステータス: ${status}`;
+            list.appendChild(li);
+          });
+        });
+    });
+  </script>
+</body>
+</html>

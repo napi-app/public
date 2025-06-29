@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ログイン画面</title>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>勤怠管理アプリ</h1>
+
+    <input type="email" id="email" placeholder="メールアドレス">
+    <input type="password" id="password" placeholder="パスワード">
+    <button onclick="login()">ログイン</button>
+
+    <p id="message"></p>
+
+    <script>
+        // Firebase 設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyB4kN3Zsy-8XlraWLfIs2125fTVI24JPGo",
+            authDomain: "shaintimemanager.firebaseapp.com",
+            projectId: "shaintimemanager",
+            storageBucket: "shaintimemanager.appspot.com",
+            messagingSenderId: "966234985083",
+            appId: "1:966234985083:web:8611f16471dc47a9a8c8de",
+            measurementId: "G-1M52J60RR2"
+        };
+
+        // Firebase初期化
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        // ログイン関数
+        function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            auth.signInWithEmailAndPassword(email, password)
+                .then(() => {
+                    document.getElementById('message').innerText = "ログイン成功！";
+                    // ログイン後にtoppage.htmlに移動する
+                    window.location.href = "toppage.html";
+                })
+                .catch((error) => {
+                    document.getElementById('message').innerText = "ログイン失敗：" + error.message;
+                });
+        }
+    </script>
+</body>
+</html>

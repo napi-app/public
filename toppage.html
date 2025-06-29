@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>勤怠管理アプリ</title>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="style.css">
+  <style>
+    #currentTime {
+      font-size: 1.4em;
+      font-weight: bold;
+      color: #3333cc;
+      background: linear-gradient(to right, #e0f7ff, #f0f4ff);
+      padding: 12px 20px;
+      border-radius: 12px;
+      margin-top: 15px;
+      text-align: center;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      display: inline-block;
+    }
+    #currentTime .time-part {
+      font-size: 2em;
+      color: #0055cc;
+      font-family: 'Orbitron', sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <h1>勤怠管理アプリ</h1>
+  <nav>
+    <button onclick="showTab('tab-clock')"><i class="fa-solid fa-clock icon"></i> 打刻</button>
+    <button onclick="showTab('tab-application')"><i class="fa-solid fa-file-signature icon"></i> 申請</button>
+    <button onclick="showTab('tab-settings')"><i class="fa-solid fa-gear icon"></i> 設定</button>
+  </nav>
+
+  <div id="tab-clock" class="tab active">
+    <h2>打刻</h2>
+    <button onclick="recordTime('出勤')">出勤</button>
+    <button onclick="recordTime('退勤')">退勤</button>
+    <br><br>
+    <p id="currentTime"></p>
+    <p id="result"></p>
+  </div>
+
+  <div id="tab-application" class="tab">
+    <!-- 申請 UI は省略せずにそのまま残す -->
+    <h2>申請</h2>
+    <button onclick="toggleSection('holidaySection')">休日申請</button>
+    <div id="holidaySection" class="section-content">
+      <label>日付: <input type="date" id="holidayDate"></label><br>
+      <label><input type="radio" name="holidayType" value="終日" checked>終日</label>
+      <label><input type="radio" name="holidayType" value="午前休">午前休</label>
+      <label><input type="radio" name="holidayType" value="午後休">午後休</label><br>
+      <label>申請理由:<br>
+        <textarea id="holidayReason" rows="2" cols="30" placeholder="有給休暇以外の申請はここに申請内容を明記する"></textarea>
+      </label><br>
+      <button onclick="submitHoliday()">申請</button>
+      <p id="holidayResult" class="result-message"></p>
+    </div>
+    <button onclick="toggleSection('lateSection')">遅刻申請</button>
+    <div id="lateSection" class="section-content">
+      <label>日付: <input type="date" id="lateDate"></label><br>
+      <label>就業開始時間: <input type="time" id="scheduledStart"></label><br>
+      <label>遅刻時間: <input type="time" id="lateTime"></label><br>
+      <button onclick="submitLate()">申請</button>
+      <p id="lateResult" class="result-message"></p>
+    </div>
+    <button onclick="toggleSection('overtimeSection')">残業申請</button>
+    <div id="overtimeSection" class="section-content">
+      <label>日付: <input type="date" id="overtimeDate"></label><br>
+      <label>開始時刻: <input type="time" id="overtimeStart"></label>
+      <label>終了時刻: <input type="time" id="overtimeEnd"></label><br>
+      <p>理由:</p>
+      <label><input type="checkbox" name="overtimeReason" value="時間内困難">時間内困難</label>
+      <label><input type="checkbox" name="overtimeReason" value="突発対応">突発対応</label>
+      <label><input type="checkbox" name="overtimeReason" value="報告書">報告書</label><br>
+      <label>その他の理由:<br>
+        <textarea id="overtimeOtherReason" rows="2" cols="30" placeholder="その他の理由を入力"></textarea>
+      </label><br>
+      <button onclick="submitOvertime()">申請</button>
+      <p id="overtimeResult" class="result-message"></p>
+    </div>
+    <button onclick="toggleSection('workOnHolidaySection')">休日出勤申請</button>
+    <div id="workOnHolidaySection" class="section-content">
+      <label>出勤日: <input type="date" id="workOnHolidayDate"></label><br>
+      <label>開始時間: <input type="time" id="workOnHolidayStart"></label>
+      <label>終了時間: <input type="time" id="workOnHolidayEnd"></label><br>
+      <label>業務内容:<br>
+        <textarea id="workOnHolidayTask" rows="2" cols="30" placeholder="例: 定期システムメンテナンスなど"></textarea>
+      </label><br>
+      <button onclick="submitWorkOnHoliday()">申請</button>
+      <p id="workOnHolidayResult" class="result-message"></p>
+    </div>
+  </div>
+
+  <div id="tab-settings" class="tab">
+    <h2>設定</h2>
+    <button onclick="auth.signOut().then(() => alert('ログアウトしました'))">ログアウト</button>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4kN3Zsy-8XlraWLfIs2125fTVI24JPGo",
+      authDomain: "shaintimemanager.firebaseapp.com",
+      projectId: "shaintimemanager",
+      storageBucket: "shaintimemanager.appspot.com",
+      messagingSenderId: "966234985083",
+      appId: "1:966234985083:web:8611f16471dc47a9a8c8de",
+      measurementId: "G-1M52J60RR2"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    function showTab(tabId) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function toggleSection(id) {
+      const section = document.getElementById(id);
+      section.style.display = section.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function updateTime() {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString();
+      const timeStr = now.toLocaleTimeString();
+      document.getElementById('currentTime').innerHTML = `現在時刻: <span class="time-part">${timeStr}</span> (${dateStr})`;
+    }
+    setInterval(updateTime, 1000);
+
+    function recordTime(type) {
+      const user = auth.currentUser;
+      if (!user) {
+        document.getElementById("result").innerText = "ログインしていません。";
+        return;
+      }
+      const now = new Date();
+
+      let latitude = null;
+      let longitude = null;
+      let address = "住所不明";
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          latitude = pos.coords.latitude;
+          longitude = pos.coords.longitude;
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ja`);
+            const data = await res.json();
+            address = data.display_name || address;
+          } catch (e) {
+            console.warn("住所取得失敗:", e);
+          }
+          saveRecord(user.uid, type, now, latitude, longitude, address);
+        }, (err) => {
+          console.warn("位置情報取得失敗:", err);
+          saveRecord(user.uid, type, now, latitude, longitude, address);
+        });
+      } else {
+        saveRecord(user.uid, type, now, latitude, longitude, address);
+      }
+    }
+
+    function saveRecord(uid, type, now, latitude, longitude, address) {
+      db.collection("attendance").add({
+        uid: uid,
+        type: type,
+        timestamp: firebase.firestore.Timestamp.fromDate(now),
+        location: {
+          latitude,
+          longitude,
+          address
+        }
+      }).then(() => {
+        document.getElementById("result").innerText = `${type}打刻しました（${now.toLocaleString()}）`;
+      }).catch((error) => {
+        document.getElementById("result").innerText = `エラー: ${error.message}`;
+      });
+    }
+  </script>
+</body>
+</html>

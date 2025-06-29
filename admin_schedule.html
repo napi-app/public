@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>従業員勤務スケジュール管理</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: center;
+    }
+
+    input[type="time"] {
+      width: 90px;
+    }
+
+    .weekday-checkbox {
+      margin: 0 4px;
+    }
+
+    button {
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>従業員勤務スケジュール管理</h1>
+  <a href="admin_attendance.html">▶ 出勤状況一覧へ戻る</a>
+
+  <table>
+    <thead>
+      <tr>
+        <th>名前</th>
+        <th>勤務曜日</th>
+        <th>出勤時間</th>
+        <th>退勤時間</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="scheduleTable"></tbody>
+  </table>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      getDocs,
+      doc,
+      getDoc,
+      setDoc
+    } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+    import {
+      getAuth,
+      onAuthStateChanged,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+
+    // Firebase初期化
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4kN3Zsy-8XlraWLfIs2125fTVI24JPGo",
+      authDomain: "shaintimemanager.firebaseapp.com",
+      projectId: "shaintimemanager",
+      storageBucket: "shaintimemanager.appspot.com",
+      messagingSenderId: "966234985083",
+      appId: "1:966234985083:web:8611f16471dc47a9a8de",
+      measurementId: "G-1M52J60RR2"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    // ▼ 自動ログアウト処理 ▼
+    const AUTO_LOGOUT_TIME = 15 * 60 * 1000; // 15分
+    let logoutTimer;
+
+    function autoLogout() {
+      signOut(auth).then(() => {
+        alert("15分間操作がなかったため、自動ログアウトしました。");
+        window.location.href = "login.html";
+      });
+    }
+
+    function resetLogoutTimer() {
+      if (logoutTimer) clearTimeout(logoutTimer);
+      logoutTimer = setTimeout(autoLogout, AUTO_LOGOUT_TIME);
+    }
+
+    ["click", "mousemove", "keydown", "scroll", "touchstart"].forEach(event => {
+      document.addEventListener(event, resetLogoutTimer);
+    });
+
+    // ログイン状態確認後、タイマー起動＋データ読み込み
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        resetLogoutTimer();
+        loadSchedules(); // ← 認証後のみデータ読み込み
+      } else {
+        window.location.href = "login.html"; // 未ログインならリダイレクト
+      }
+    });
+
+    // ▼ スケジュール読み込み ▼
+    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+
+    async function loadSchedules() {
+      const usersSnap = await getDocs(collection(db, "users"));
+      const table = document.getElementById("scheduleTable");
+      table.innerHTML = "";
+
+      for (const userDoc of usersSnap.docs) {
+        const user = userDoc.data();
+        const uid = userDoc.id;
+
+        let schedule = {
+          weekdays: [],
+          startTime: "09:00",
+          endTime: "18:00"
+        };
+
+        const scheduleRef = doc(db, "workSchedules", uid);
+        const scheduleDoc = await getDoc(scheduleRef);
+        if (scheduleDoc.exists()) {
+          const data = scheduleDoc.data();
+          schedule.weekdays = data.weekdays || [];
+          schedule.startTime = data.startTime || "00:00";
+          schedule.endTime = data.endTime || "00:00";
+        }
+
+        const checkboxHTML = weekdays.map(day => {
+          const checked = schedule.weekdays.includes(day) ? "checked" : "";
+          return `<label><input type="checkbox" class="weekday-checkbox" value="${day}" ${checked}>${day}</label>`;
+        }).join(" ");
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${user.name}</td>
+          <td>${checkboxHTML}</td>
+          <td><input type="time" class="start-time" value="${schedule.startTime}"></td>
+          <td><input type="time" class="end-time" value="${schedule.endTime}"></td>
+          <td><button onclick="saveSchedule('${uid}', this)">保存</button></td>
+        `;
+        table.appendChild(row);
+      }
+    }
+
+    // ▼ 保存処理 ▼
+    window.saveSchedule = async function(uid, button) {
+      const row = button.closest("tr");
+      const checkboxes = row.querySelectorAll(".weekday-checkbox:checked");
+      const startTime = row.querySelector(".start-time").value;
+      const endTime = row.querySelector(".end-time").value;
+      const selectedDays = Array.from(checkboxes).map(cb => cb.value);
+
+      await setDoc(doc(db, "workSchedules", uid), {
+        uid,
+        weekdays: selectedDays,
+        startTime,
+        endTime
+      });
+
+      alert("保存しました");
+    };
+  </script>
+</body>
+</html>
