@@ -58,25 +58,25 @@
 ### 👨‍💼 社員ログインQRコード
 
 - demo_user1  
-  ![demo_user1](https://raw.githubusercontent.com/taerunda/shaintimemanager/main/screenshots/demo_user1.png)
+  ![demo_user1](https://raw.githubusercontent.com/taerunda/public/main/screenshots/demo_user1.png)
 
 - demo_user2  
-  ![demo_user2](https://raw.githubusercontent.com/taerunda/shaintimemanager/main/screenshots/demo_user2.png)
+  ![demo_user2](https://raw.githubusercontent.com/taerunda/public/main/screenshots/demo_user2.png)
 
 ### 🛠 管理者ログインQRコード
 
 - demo_admin  
-  ![demo_admin](https://raw.githubusercontent.com/taerunda/shaintimemanager/main/screenshots/demo_admin.png)
+  ![demo_admin](https://raw.githubusercontent.com/taerunda/public/main/screenshots/demo_admin.png)
 
 ---
 
 ## 📷 スクリーンショット
 
-### 👨‍💼 社員画面
-![社員画面](https://raw.githubusercontent.com/taerunda/shaintimemanager/main/screenshots/employee.png)
+### 👨‍💼 社員画面  
+![社員画面](https://raw.githubusercontent.com/taerunda/public/main/screenshots/employee.png)
 
-### 🛠 管理者画面
-![管理者画面](https://raw.githubusercontent.com/taerunda/shaintimemanager/main/screenshots/admin.png)
+### 🛠 管理者画面  
+![管理者画面](https://raw.githubusercontent.com/taerunda/public/main/screenshots/admin.png)
 
 ---
 
@@ -91,8 +91,3 @@ MIT License
 
 作成者：taerunda  
 ご質問・ご相談は [https://www.napiblog.fun/help/](https://www.napiblog.fun/help/) までご連絡ください。
-
-
-
-
-
