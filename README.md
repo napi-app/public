@@ -89,5 +89,5 @@ MIT License
 
 ## 📬 開発者
 
-作成者：taerunda  
+作成者：napi  
 ご質問・ご相談は [https://www.napiblog.fun/help/](https://www.napiblog.fun/help/) までご連絡ください。
